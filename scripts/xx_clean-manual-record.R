@@ -4,7 +4,7 @@
 # in the future.
 
 
-# 0 - Load packages and functions ----
+# 0 - Load packages, functions and config ----
 
 library(readr)
 library(here)
@@ -12,8 +12,11 @@ library(dplyr)
 library(stringr)
 library(tidyr)
 library(lubridate)
+library(RtoSQLServer)
 
 source(here("R", "clean_manual_url.R"))
+
+config <- yaml::read_yaml(here("config.yml"))
 
 
 # 1 - Read and clean Google survey data ----
@@ -76,12 +79,14 @@ google <-
   filter(!is.na(url)) %>%
   bind_rows(missing_urls)
 
-if (file.exists(here("lookups", "invalid-urls.csv"))) {
+invalid_url_path <- here("inputs", "invalid-urls.csv")
+
+if (file.exists(invalid_url_path)) {
   
   invalid_urls <- 
     google %>% 
     filter(!str_starts(url, "https://scotland.shinyapps.io/")) %>%
-    left_join(read_csv(here("lookups", "invalid-urls.csv")), 
+    left_join(read_csv(invalid_url_path), 
               by = join_by(url == invalid_url)) %>%
     mutate(url = valid_url) %>%
     select(-valid_url)
@@ -94,12 +99,14 @@ if (file.exists(here("lookups", "invalid-urls.csv"))) {
 }
 
 
-# 3 - Save clean dataset ----
+# 3 - Save clean dataset to ADM ----
 
-write_rds(
-  google,
-  here("outputs", "2024-07-16_manual-record.rds"),
-  compress = "gz"
+write_dataframe_to_db(
+  server = config$adm_server,
+  database = "AdministrationShinyapps",
+  schema = "supportadmin",
+  table_name = "contact_details_historic",
+  google
 )
 
 
